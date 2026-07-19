@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum UploadStatus {
+  PENDING
+  VALIDATING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  fields       Field[]
+
+  @@map("users")
+}
+
+model Field {
+  id          String   @id @default(uuid())
+  name        String
+  location    String?
+  description String?
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wells       Well[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("fields")
+}
+
+model Well {
+  id          String              @id @default(uuid())
+  name        String
+  apiNumber   String?             @unique @map("api_number")
+  fieldId     String              @map("field_id")
+  field       Field               @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  latitude    Float?
+  longitude   Float?
+  status      String              @default("ACTIVE")
+  esp         Esp?
+  uploads     DataUpload[]
+  readings    SensorReading[]
+  derived     DerivedMetric[]
+  anomalies   Anomaly[]
+  predictions FailurePrediction[]
+  alerts      Alert[]
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([fieldId])
+  @@map("wells")
+}
+
+model Esp {
+  id               String   @id @default(uuid())
+  wellId           String   @unique @map("well_id")
+  well             Well     @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  manufacturer     String
+  model            String
+  installationDate DateTime @map("installation_date")
+  pumpStages       Int      @map("pump_stages")
+  ratedPower       Float    @map("rated_power")
+  ratedSpeed       Float    @map("rated_speed")
+  frequencyMin     Float    @map("frequency_min")
+  frequencyMax     Float    @map("frequency_max")
+  motorRating      Float    @map("motor_rating")
+  designFlowMin    Float    @map("design_flow_min")
+  designFlowMax    Float    @map("design_flow_max")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("esps")
+}
+
+model DataUpload {
+  id              String       @id @default(uuid())
+  wellId          String       @map("well_id")
+  well            Well         @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  fileName        String       @map("file_name")
+  rowCount        Int          @map("row_count")
+  validRowCount   Int?         @map("valid_row_count")
+  invalidRowCount Int?         @map("invalid_row_count")
+  status          UploadStatus @default(PENDING)
+  validationErrors Json?       @map("validation_errors")
+  uploadedAt      DateTime     @default(now()) @map("uploaded_at")
+  processedAt     DateTime?    @map("processed_at")
+
+  @@index([wellId])
+  @@map("data_uploads")
+}
+
+model SensorReading {
+  id                String   @id @default(uuid())
+  wellId            String   @map("well_id")
+  well              Well     @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  uploadId          String?  @map("upload_id")
+  timestamp         DateTime
+  liquidRate        Float?   @map("liquid_rate")
+  oilRate           Float?   @map("oil_rate")
+  waterCut          Float?   @map("water_cut")
+  gasRate           Float?   @map("gas_rate")
+  gor               Float?
+  intakePressure    Float?   @map("intake_pressure")
+  dischargePressure Float?   @map("discharge_pressure")
+  annulusPressure   Float?   @map("annulus_pressure")
+  motorCurrent      Float?   @map("motor_current")
+  motorVoltage      Float?   @map("motor_voltage")
+  motorTemperature  Float?   @map("motor_temperature")
+  pumpSpeed         Float?   @map("pump_speed")
+  frequency         Float?
+  vibration         Float?
+  powerFactor       Float?   @map("power_factor")
+
+  @@unique([wellId, timestamp])
+  @@index([wellId, timestamp])
+  @@index([timestamp])
+  @@map("sensor_readings")
+}
+
+model DerivedMetric {
+  id                          String   @id @default(uuid())
+  wellId                      String   @map("well_id")
+  well                        Well     @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  timestamp                   DateTime
+  pumpDifferentialPressure     Float?   @map("pump_differential_pressure")
+  pumpHead                    Float?   @map("pump_head")
+  hydraulicPower              Float?   @map("hydraulic_power")
+  electricalPower             Float?   @map("electrical_power")
+  pumpEfficiency              Float?   @map("pump_efficiency")
+  productionDeclineRate       Float?   @map("production_decline_rate")
+  currentTrend                Float?   @map("current_trend")
+  temperatureTrend            Float?   @map("temperature_trend")
+  pressureTrend               Float?   @map("pressure_trend")
+  liquidRateRollingAvg        Float?   @map("liquid_rate_rolling_avg")
+  currentRollingAvg           Float?   @map("current_rolling_avg")
+  tempRollingAvg              Float?   @map("temp_rolling_avg")
+  liquidRateRollingStd        Float?   @map("liquid_rate_rolling_std")
+  currentRollingStd           Float?   @map("current_rolling_std")
+  rateOfChangeLiquid          Float?   @map("rate_of_change_liquid")
+  rateOfChangeCurrent         Float?   @map("rate_of_change_current")
+  deviationFromBaseline       Json?    @map("deviation_from_baseline")
+
+  @@unique([wellId, timestamp])
+  @@index([wellId, timestamp])
+  @@map("derived_metrics")
+}
+
+model Anomaly {
+  id          String        @id @default(uuid())
+  wellId      String        @map("well_id")
+  well        Well          @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  parameter   String
+  timestamp   DateTime
+  actualValue Float         @map("actual_value")
+  expectedMin Float         @map("expected_min")
+  expectedMax Float         @map("expected_max")
+  zScore      Float?        @map("z_score")
+  severity    AlertSeverity
+  explanation String
+  detectedAt  DateTime      @default(now()) @map("detected_at")
+
+  @@index([wellId, timestamp])
+  @@index([wellId, severity])
+  @@map("anomalies")
+}
+
+model FailurePrediction {
+  id                     String    @id @default(uuid())
+  wellId                 String    @map("well_id")
+  well                   Well      @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  healthScore            Float     @map("health_score")
+  riskLevel              RiskLevel @map("risk_level")
+  failureProbability     Float?    @map("failure_probability")
+  predictedFailureType   String?   @map("predicted_failure_type")
+  estimatedFailureWindow String?   @map("estimated_failure_window")
+  confidence             Float?
+  insufficientData       Boolean   @default(false) @map("insufficient_data")
+  missingDataReason      String?   @map("missing_data_reason")
+  contributingFactors    Json      @map("contributing_factors")
+  anomalySummary         Json?     @map("anomaly_summary")
+  recommendations        Json
+  explanation            String
+  analyzedAt             DateTime  @default(now()) @map("analyzed_at")
+
+  @@index([wellId, analyzedAt])
+  @@index([riskLevel])
+  @@map("failure_predictions")
+}
+
+model Alert {
+  id          String        @id @default(uuid())
+  wellId      String        @map("well_id")
+  well        Well          @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  severity    AlertSeverity
+  type        String
+  title       String
+  message     String
+  isRead      Boolean       @default(false) @map("is_read")
+  triggeredAt DateTime      @default(now()) @map("triggered_at")
+
+  @@index([wellId, triggeredAt])
+  @@index([isRead])
+  @@map("alerts")
+}
