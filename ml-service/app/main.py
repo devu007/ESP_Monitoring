@@ -1,5 +1,9 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.routes.analysis import router as analysis_router
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 
 app = FastAPI(
     title="ESP ML Service",
@@ -14,6 +18,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(analysis_router, prefix="/ml", tags=["Analysis"])
 
 
 @app.get("/health")

@@ -157,6 +157,22 @@ export class UploadService {
         validRecords.push(record);
       }
 
+      // Delete existing readings with overlapping timestamps so the new upload replaces old data
+      if (validRecords.length > 0) {
+        const timestamps = validRecords.map((r) => r.timestamp);
+        const minTs = new Date(Math.min(...timestamps.map((t) => t.getTime())));
+        const maxTs = new Date(Math.max(...timestamps.map((t) => t.getTime())));
+        const deleted = await prisma.sensorReading.deleteMany({
+          where: {
+            wellId,
+            timestamp: { gte: minTs, lte: maxTs },
+          },
+        });
+        if (deleted.count > 0) {
+          logger.info(`Upload ${upload.id}: removed ${deleted.count} overlapping readings (${minTs.toISOString()} to ${maxTs.toISOString()})`);
+        }
+      }
+
       // Bulk insert in batches
       const BATCH_SIZE = 500;
       let inserted = 0;
@@ -183,7 +199,6 @@ export class UploadService {
             vibration: r.vibration,
             powerFactor: r.powerFactor,
           })),
-          skipDuplicates: true,
         });
         inserted += result.count;
       }

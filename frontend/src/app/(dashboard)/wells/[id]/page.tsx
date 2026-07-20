@@ -3,13 +3,14 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { Well, Esp } from '@/types';
+import { Well, Esp, AnalysisResult } from '@/types';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge, getRiskBadgeVariant, getHealthBadgeVariant } from '@/components/ui/badge';
-import { ArrowLeft, Settings, Activity, Trash2, Eye } from 'lucide-react';
+import { ArrowLeft, Settings, Activity, Trash2, Eye, Play, Loader2 } from 'lucide-react';
 import { DataViewer } from '@/components/wells/data-viewer';
+import { AnalysisResults } from '@/components/wells/analysis-results';
 
 export default function WellDetailPage() {
   const params = useParams();
@@ -22,6 +23,10 @@ export default function WellDetailPage() {
   const [espSubmitting, setEspSubmitting] = useState(false);
   const [espError, setEspError] = useState('');
   const [viewingUploadId, setViewingUploadId] = useState<string | null>(null);
+  const [selectedAnalysisUploadId, setSelectedAnalysisUploadId] = useState<string>('');
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
 
   const [espForm, setEspForm] = useState({
     manufacturer: '',
@@ -45,6 +50,26 @@ export default function WellDetailPage() {
   };
 
   useEffect(() => { fetchWell(); }, [wellId]);
+
+  const handleRunAnalysis = async () => {
+    if (!selectedAnalysisUploadId) {
+      setAnalysisError('Please select a dataset to analyze.');
+      return;
+    }
+    setAnalyzing(true);
+    setAnalysisError('');
+    setAnalysisResult(null);
+    try {
+      const res = await api.post<AnalysisResult>(`/wells/${wellId}/analyze`, {
+        uploadId: selectedAnalysisUploadId,
+      });
+      setAnalysisResult(res.data!);
+    } catch (err: any) {
+      setAnalysisError(err.message || 'Analysis failed');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleEspSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -370,6 +395,60 @@ export default function WellDetailPage() {
       {/* Sensor Data Viewer */}
       {viewingUploadId && (
         <DataViewer wellId={wellId} uploadId={viewingUploadId} />
+      )}
+
+      {/* Analysis Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-purple-400" />
+            <CardTitle>ESP Health Analysis</CardTitle>
+          </div>
+        </CardHeader>
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+          <div className="flex-1 w-full sm:max-w-md">
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Select Dataset</label>
+            <select
+              value={selectedAnalysisUploadId}
+              onChange={(e) => { setSelectedAnalysisUploadId(e.target.value); setAnalysisResult(null); setAnalysisError(''); }}
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Choose an uploaded dataset --</option>
+              {well.uploads?.filter(u => u.status === 'COMPLETED').map((upload) => (
+                <option key={upload.id} value={upload.id}>
+                  {upload.fileName} ({upload.rowCount} rows — {new Date(upload.uploadedAt).toLocaleDateString()})
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button onClick={handleRunAnalysis} disabled={analyzing || !selectedAnalysisUploadId} variant="primary">
+            {analyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 mr-2" />
+                Run Analysis
+              </>
+            )}
+          </Button>
+        </div>
+        {!analysisResult && !analyzing && !analysisError && (
+          <p className="text-sm text-slate-500 mt-4">
+            Select a dataset above and click &quot;Run Analysis&quot; to compute health score, detect anomalies, and identify failure risks for that specific upload.
+          </p>
+        )}
+        {analysisError && (
+          <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {analysisError}
+          </div>
+        )}
+      </Card>
+
+      {analysisResult && (
+        <AnalysisResults result={analysisResult} />
       )}
     </div>
   );

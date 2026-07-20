@@ -196,6 +196,7 @@ model FailurePrediction {
   id                     String    @id @default(uuid())
   wellId                 String    @map("well_id")
   well                   Well      @relation(fields: [wellId], references: [id], onDelete: Cascade)
+  uploadId               String?   @map("upload_id")
   healthScore            Float     @map("health_score")
   riskLevel              RiskLevel @map("risk_level")
   failureProbability     Float?    @map("failure_probability")
@@ -211,6 +212,7 @@ model FailurePrediction {
   analyzedAt             DateTime  @default(now()) @map("analyzed_at")
 
   @@index([wellId, analyzedAt])
+  @@index([wellId, uploadId])
   @@index([riskLevel])
   @@map("failure_predictions")
 }

@@ -106,6 +106,53 @@ export interface UploadResponse {
   validation: ValidationResult;
 }
 
+export interface ContributingFactor {
+  factor: string;
+  score: number;
+  weight: number;
+  weighted_contribution: number;
+  reason: string;
+}
+
+export interface RuleResult {
+  rule_name: string;
+  failure_type: string;
+  severity: string;
+  triggered_conditions: string[];
+  explanation: string;
+  recommendation: string;
+}
+
+export interface AnomalySummary {
+  parameter: string;
+  timestamp: string;
+  actual_value: number;
+  expected_min: number;
+  expected_max: number;
+  z_score: number | null;
+  severity: string;
+  explanation: string;
+}
+
+export interface AnalysisResult {
+  predictionId?: string;
+  well_id: string;
+  health_score: number | null;
+  risk_level: string | null;
+  failure_probability: number | null;
+  predicted_failure_type: string | null;
+  estimated_failure_window: string | null;
+  confidence: number | null;
+  insufficient_data: boolean;
+  missing_data_reason: string | null;
+  contributing_factors: ContributingFactor[];
+  anomalies: AnomalySummary[];
+  recommendations: string[];
+  explanation: string;
+  health_breakdown?: Record<string, { score: number; weight: number; reason: string }>;
+  rule_results: RuleResult[];
+}
+
 export interface ApiResponse<T> {
   status: 'success' | 'error';
   data?: T;
