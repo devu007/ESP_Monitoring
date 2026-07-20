@@ -123,9 +123,14 @@ def run_analysis(db: Session, well_id: str, upload_id: str | None = None) -> dic
 
     # Step 5: Health score
     health_result = compute_health_score(features)
+    logger.info(f"Health score: {health_result['health_score']}, risk: {health_result['risk_level']}")
+    for name, data in health_result["breakdown"].items():
+        logger.info(f"  {name}: score={data['score']}, weight={data['weight']}, reason={data['reason']}")
 
     # Step 6: Rule engine
     rule_results: list[RuleResult] = run_rule_engine(features, df)
+    for r in rule_results:
+        logger.info(f"  Rule triggered: {r.rule_name} ({r.severity}) - {r.failure_type}")
 
     # Step 7: Anomaly detection
     anomalies = detect_all_anomalies(df)

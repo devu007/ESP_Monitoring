@@ -6,13 +6,16 @@ Two methods:
 2. Isolation Forest: Multivariate anomaly detection across all parameters.
 
 Each anomaly is relative to the well's own historical baseline.
+Rolling windows are time-aware based on detected data frequency.
 """
 
+import logging
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import IsolationForest
 from app.config import DEFAULT_THRESHOLDS
 
+logger = logging.getLogger(__name__)
 
 ANOMALY_PARAMS = [
     "liquid_rate",
@@ -26,57 +29,75 @@ ANOMALY_PARAMS = [
 ]
 
 Z_THRESHOLD = DEFAULT_THRESHOLDS["z_score_threshold"]
-ROLLING_WINDOW = DEFAULT_THRESHOLDS["rolling_window_days"]
+ROLLING_WINDOW_DAYS = DEFAULT_THRESHOLDS["rolling_window_days"]
+
+
+def _detect_frequency(df: pd.DataFrame) -> float:
+    if len(df) < 2:
+        return 1.0
+    time_diffs = df["timestamp"].diff().dropna()
+    median_diff = time_diffs.median()
+    if median_diff.total_seconds() <= 0:
+        return 1.0
+    return max(1.0, float(pd.Timedelta(days=1) / median_diff))
 
 
 def detect_anomalies_zscore(df: pd.DataFrame) -> list[dict]:
-    """Detect anomalies using per-parameter Z-score against rolling baseline."""
+    """Detect anomalies using per-parameter Z-score against a baseline from
+    the first portion of the data (the healthy period)."""
     anomalies = []
-    df = df.copy().sort_values("timestamp")
+    df = df.copy().sort_values("timestamp").reset_index(drop=True)
+
+    ppd = _detect_frequency(df)
+    rolling_pts = max(10, int(ROLLING_WINDOW_DAYS * ppd))
+
+    # Use the first portion as the healthy baseline for Z-score computation
+    baseline_end = min(rolling_pts, int(len(df) * 0.6))
 
     for param in ANOMALY_PARAMS:
         if param not in df.columns or df[param].isna().all():
             continue
 
-        rolling_mean = df[param].rolling(window=ROLLING_WINDOW, min_periods=5).mean()
-        rolling_std = df[param].rolling(window=ROLLING_WINDOW, min_periods=5).std()
+        baseline = df[param].iloc[:baseline_end]
+        baseline_mean = baseline.mean()
+        baseline_std = baseline.std()
 
-        z_scores = np.where(
-            rolling_std > 0,
-            (df[param] - rolling_mean) / rolling_std,
-            0,
-        )
+        if pd.isna(baseline_std) or baseline_std <= 0:
+            continue
 
-        for i in range(ROLLING_WINDOW, len(df)):
-            z = z_scores[i]
-            if abs(z) >= Z_THRESHOLD and pd.notna(df[param].iloc[i]):
-                abs_z = abs(z)
-                if abs_z >= Z_THRESHOLD * 2:
-                    severity = "CRITICAL"
-                elif abs_z >= Z_THRESHOLD * 1.5:
-                    severity = "HIGH"
-                else:
-                    severity = "WARNING"
+        for i in range(baseline_end, len(df)):
+            val = df[param].iloc[i]
+            if pd.isna(val):
+                continue
 
-                mean_val = rolling_mean.iloc[i]
-                std_val = rolling_std.iloc[i]
+            z = (val - baseline_mean) / baseline_std
+            abs_z = abs(z)
+            if abs_z < Z_THRESHOLD:
+                continue
 
-                anomalies.append({
-                    "parameter": param,
-                    "timestamp": df["timestamp"].iloc[i].isoformat()
-                        if hasattr(df["timestamp"].iloc[i], "isoformat")
-                        else str(df["timestamp"].iloc[i]),
-                    "actual_value": round(float(df[param].iloc[i]), 4),
-                    "expected_min": round(float(mean_val - Z_THRESHOLD * std_val), 4),
-                    "expected_max": round(float(mean_val + Z_THRESHOLD * std_val), 4),
-                    "z_score": round(float(z), 2),
-                    "severity": severity,
-                    "explanation": (
-                        f"{param.replace('_', ' ').title()} value {df[param].iloc[i]:.2f} "
-                        f"is {abs_z:.1f} standard deviations {'above' if z > 0 else 'below'} "
-                        f"the rolling {ROLLING_WINDOW}-day average ({mean_val:.2f})"
-                    ),
-                })
+            if abs_z >= Z_THRESHOLD * 2:
+                severity = "CRITICAL"
+            elif abs_z >= Z_THRESHOLD * 1.5:
+                severity = "HIGH"
+            else:
+                severity = "WARNING"
+
+            anomalies.append({
+                "parameter": param,
+                "timestamp": df["timestamp"].iloc[i].isoformat()
+                    if hasattr(df["timestamp"].iloc[i], "isoformat")
+                    else str(df["timestamp"].iloc[i]),
+                "actual_value": round(float(val), 4),
+                "expected_min": round(float(baseline_mean - Z_THRESHOLD * baseline_std), 4),
+                "expected_max": round(float(baseline_mean + Z_THRESHOLD * baseline_std), 4),
+                "z_score": round(float(z), 2),
+                "severity": severity,
+                "explanation": (
+                    f"{param.replace('_', ' ').title()} value {val:.2f} "
+                    f"is {abs_z:.1f} standard deviations {'above' if z > 0 else 'below'} "
+                    f"the baseline average ({baseline_mean:.2f})"
+                ),
+            })
 
     return anomalies
 
@@ -149,7 +170,6 @@ def detect_all_anomalies(df: pd.DataFrame) -> list[dict]:
     z_anomalies = detect_anomalies_zscore(df)
     if_anomalies = detect_anomalies_isolation_forest(df)
 
-    # Only return recent anomalies (last 30 days of data)
     all_anomalies = z_anomalies + if_anomalies
 
     # Cap to most recent 50 anomalies

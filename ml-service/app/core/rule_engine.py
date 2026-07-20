@@ -4,10 +4,12 @@ Extensible Rule-Based Failure Detection Engine
 Each rule is a class implementing BaseRule.evaluate().
 Rules are registered in RULES list and iterated by the engine.
 New rules are added by creating a class and appending to RULES.
+
+All trend thresholds assume per-day units (normalized by feature engineering).
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 import pandas as pd
 import numpy as np
@@ -43,20 +45,20 @@ class GasInterferenceRule(BaseRule):
         params = {}
 
         gor_dev = features.get("baseline_deviations", {}).get("gor", 0)
-        if gor_dev > 15:
+        if gor_dev > 12:
             conditions.append(f"GOR increased {gor_dev:.1f}% above baseline")
             params["gor_deviation_pct"] = gor_dev
 
         dp_trend = features.get("pump_differential_pressure_trend")
-        if dp_trend is not None and dp_trend < -0.5:
-            conditions.append(f"Pump DP trending down (slope: {dp_trend:.2f})")
-            params["dp_trend"] = dp_trend
+        if dp_trend is not None and dp_trend < -3:
+            conditions.append(f"Pump DP trending down ({dp_trend:.1f} psi/day)")
+            params["dp_trend_per_day"] = round(dp_trend, 2)
 
         lr_std = features.get("liquid_rate_rolling_std")
         lr_avg = features.get("liquid_rate_rolling_avg")
         if lr_std and lr_avg and lr_avg > 0:
             cv = (lr_std / lr_avg) * 100
-            if cv > 15:
+            if cv > 12:
                 conditions.append(f"Unstable liquid rate (CV: {cv:.1f}%)")
                 params["liquid_rate_cv"] = round(cv, 1)
 
@@ -64,7 +66,7 @@ class GasInterferenceRule(BaseRule):
         curr_avg = features.get("motor_current_rolling_avg")
         if curr_std and curr_avg and curr_avg > 0:
             curr_cv = (curr_std / curr_avg) * 100
-            if curr_cv > 10:
+            if curr_cv > 8:
                 conditions.append(f"Unstable motor current (CV: {curr_cv:.1f}%)")
                 params["current_cv"] = round(curr_cv, 1)
 
@@ -91,22 +93,22 @@ class PumpOffRule(BaseRule):
         params = {}
 
         ip_trend = features.get("intake_pressure_trend")
-        if ip_trend is not None and ip_trend < -1.0:
-            conditions.append(f"Intake pressure declining (slope: {ip_trend:.2f})")
-            params["intake_pressure_trend"] = ip_trend
+        if ip_trend is not None and ip_trend < -3:
+            conditions.append(f"Intake pressure declining ({ip_trend:.1f} psi/day)")
+            params["intake_pressure_trend"] = round(ip_trend, 2)
 
         lr_trend = features.get("liquid_rate_trend")
-        if lr_trend is not None and lr_trend < -1.0:
-            conditions.append(f"Liquid rate declining (slope: {lr_trend:.2f})")
-            params["liquid_rate_trend"] = lr_trend
+        if lr_trend is not None and lr_trend < -5:
+            conditions.append(f"Liquid rate declining ({lr_trend:.1f} bpd/day)")
+            params["liquid_rate_trend"] = round(lr_trend, 2)
 
         curr = features.get("motor_current")
         curr_avg = features.get("motor_current_rolling_avg")
         if curr is not None and curr_avg is not None and curr_avg > 0:
-            if curr < curr_avg * 0.8:
+            if curr < curr_avg * 0.85:
                 conditions.append(f"Low motor current ({curr:.1f}A vs avg {curr_avg:.1f}A)")
                 params["motor_current"] = curr
-                params["motor_current_avg"] = curr_avg
+                params["motor_current_avg"] = round(curr_avg, 1)
 
         if len(conditions) >= 2:
             severity = "HIGH" if len(conditions) >= 3 else "MEDIUM"
@@ -131,28 +133,28 @@ class PumpDegradationRule(BaseRule):
         params = {}
 
         prod_decline = features.get("production_decline_rate")
-        if prod_decline is not None and prod_decline < -10:
+        if prod_decline is not None and prod_decline < -8:
             conditions.append(f"Production declined {prod_decline:.1f}%")
-            params["production_decline_rate"] = prod_decline
+            params["production_decline_rate"] = round(prod_decline, 1)
 
         eff = features.get("pump_efficiency")
         eff_trend = features.get("pump_efficiency_trend")
         if eff_trend is not None and eff_trend < -0.3:
-            conditions.append(f"Pump efficiency declining (slope: {eff_trend:.2f})")
-            params["pump_efficiency_trend"] = eff_trend
-        if eff is not None and eff < 40:
+            conditions.append(f"Pump efficiency declining ({eff_trend:.2f}/day)")
+            params["pump_efficiency_trend"] = round(eff_trend, 2)
+        if eff is not None and eff < 45:
             conditions.append(f"Low pump efficiency: {eff:.1f}%")
-            params["pump_efficiency"] = eff
+            params["pump_efficiency"] = round(eff, 1)
 
         curr_trend = features.get("motor_current_trend")
-        if curr_trend is not None and curr_trend > 0.3:
-            conditions.append(f"Motor current increasing (slope: {curr_trend:.2f})")
-            params["motor_current_trend"] = curr_trend
+        if curr_trend is not None and curr_trend > 0.2:
+            conditions.append(f"Motor current increasing ({curr_trend:+.2f} A/day)")
+            params["motor_current_trend"] = round(curr_trend, 2)
 
         head_trend = features.get("pump_differential_pressure_trend")
-        if head_trend is not None and head_trend < -0.5:
-            conditions.append(f"Pump head declining (slope: {head_trend:.2f})")
-            params["pump_head_trend"] = head_trend
+        if head_trend is not None and head_trend < -1.5:
+            conditions.append(f"Pump head declining ({head_trend:.1f} psi/day)")
+            params["pump_head_trend"] = round(head_trend, 2)
 
         if len(conditions) >= 2:
             severity = "CRITICAL" if len(conditions) >= 4 else "HIGH" if len(conditions) >= 3 else "MEDIUM"
@@ -190,14 +192,14 @@ class MotorOverheatingRule(BaseRule):
                 params["motor_temperature"] = temp
 
         curr_trend = features.get("motor_current_trend")
-        if curr_trend is not None and curr_trend > 0.5:
-            conditions.append(f"Increasing motor current (slope: {curr_trend:.2f})")
-            params["motor_current_trend"] = curr_trend
+        if curr_trend is not None and curr_trend > 0.3:
+            conditions.append(f"Increasing motor current ({curr_trend:+.2f} A/day)")
+            params["motor_current_trend"] = round(curr_trend, 2)
 
         temp_trend = features.get("motor_temperature_trend")
         if temp_trend is not None and temp_trend > 0.5:
-            conditions.append(f"Temperature trending up (slope: {temp_trend:.2f})")
-            params["motor_temperature_trend"] = temp_trend
+            conditions.append(f"Temperature trending up ({temp_trend:+.1f}°F/day)")
+            params["motor_temperature_trend"] = round(temp_trend, 2)
 
         if len(conditions) >= 1 and temp is not None and temp >= warn_t:
             severity = "CRITICAL" if temp >= crit_t else "HIGH"
@@ -223,22 +225,26 @@ class MechanicalDamageRule(BaseRule):
         from app.config import DEFAULT_THRESHOLDS
 
         vib = features.get("vibration")
+        vib_dev = features.get("baseline_deviations", {}).get("vibration", 0)
         vib_crit = DEFAULT_THRESHOLDS["vibration_critical"]
         vib_warn = DEFAULT_THRESHOLDS["vibration_warning"]
         if vib is not None and vib >= vib_warn:
             label = "CRITICAL" if vib >= vib_crit else "elevated"
             conditions.append(f"Vibration {label}: {vib:.3f} g")
             params["vibration"] = vib
+        elif vib_dev > 50:
+            conditions.append(f"Vibration significantly above baseline ({vib_dev:+.1f}%)")
+            params["vibration_deviation_pct"] = vib_dev
 
         curr_dev = features.get("baseline_deviations", {}).get("motor_current", 0)
-        if abs(curr_dev) > 20:
+        if abs(curr_dev) > 15:
             conditions.append(f"Abnormal motor current (deviation: {curr_dev:+.1f}%)")
             params["motor_current_deviation_pct"] = curr_dev
 
         prod_decline = features.get("production_decline_rate")
-        if prod_decline is not None and prod_decline < -20:
-            conditions.append(f"Sudden production decline: {prod_decline:.1f}%")
-            params["production_decline_rate"] = prod_decline
+        if prod_decline is not None and prod_decline < -15:
+            conditions.append(f"Significant production decline: {prod_decline:.1f}%")
+            params["production_decline_rate"] = round(prod_decline, 1)
 
         if len(conditions) >= 2:
             severity = "CRITICAL" if vib is not None and vib >= vib_crit else "HIGH"
