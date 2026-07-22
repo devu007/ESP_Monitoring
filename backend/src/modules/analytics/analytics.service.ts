@@ -142,6 +142,56 @@ export class AnalyticsService {
     });
   }
 
+  async getChartData(wellId: string, userId: string, uploadId?: string) {
+    const well = await prisma.well.findFirst({
+      where: { id: wellId, field: { userId } },
+    });
+    if (!well) throw new NotFoundError('Well');
+
+    const where: any = { wellId };
+    if (uploadId) where.uploadId = uploadId;
+
+    const readings = await prisma.sensorReading.findMany({
+      where,
+      orderBy: { timestamp: 'asc' },
+      select: {
+        timestamp: true,
+        liquidRate: true,
+        oilRate: true,
+        waterCut: true,
+        intakePressure: true,
+        dischargePressure: true,
+        motorCurrent: true,
+        motorTemperature: true,
+        vibration: true,
+        frequency: true,
+        powerFactor: true,
+      },
+    });
+
+    return readings;
+  }
+
+  async getHealthHistory(wellId: string, userId: string) {
+    const well = await prisma.well.findFirst({
+      where: { id: wellId, field: { userId } },
+    });
+    if (!well) throw new NotFoundError('Well');
+
+    return prisma.failurePrediction.findMany({
+      where: { wellId, insufficientData: false },
+      orderBy: { analyzedAt: 'asc' },
+      select: {
+        analyzedAt: true,
+        healthScore: true,
+        riskLevel: true,
+        failureProbability: true,
+        predictedFailureType: true,
+      },
+      take: 50,
+    });
+  }
+
   private mapRiskLevel(level: string | null): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
     const map: Record<string, 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'> = {
       LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH', CRITICAL: 'CRITICAL',

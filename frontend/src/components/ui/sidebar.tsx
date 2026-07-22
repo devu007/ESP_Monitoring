@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { LayoutDashboard, Landmark, Droplets, Upload, LogOut } from 'lucide-react';
+import { LayoutDashboard, Landmark, Droplets, Upload, Bell, LogOut } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/fields', label: 'Fields', icon: Landmark },
   { href: '/wells', label: 'Wells', icon: Droplets },
   { href: '/upload', label: 'Upload Data', icon: Upload },
+  { href: '/alerts', label: 'Alerts', icon: Bell },
 ];
 
 export function Sidebar() {

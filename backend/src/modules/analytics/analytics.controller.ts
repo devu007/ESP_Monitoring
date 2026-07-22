@@ -55,4 +55,30 @@ export class AnalyticsController {
       next(error);
     }
   }
+
+  async getChartData(req: Request, res: Response, next: NextFunction) {
+    try {
+      const uploadId = req.query.uploadId as string | undefined;
+      const data = await analyticsService.getChartData(
+        req.params.id as string,
+        req.user!.userId,
+        uploadId
+      );
+      res.json({ status: 'success', data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getHealthHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await analyticsService.getHealthHistory(
+        req.params.id as string,
+        req.user!.userId
+      );
+      res.json({ status: 'success', data });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

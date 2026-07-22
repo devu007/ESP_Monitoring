@@ -8,6 +8,7 @@ import { wellRoutes } from './modules/well/well.routes';
 import { espRoutes } from './modules/esp/esp.routes';
 import { uploadRoutes } from './modules/upload/upload.routes';
 import { analyticsRoutes } from './modules/analytics/analytics.routes';
+import { alertRoutes } from './modules/alerts/alerts.routes';
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use('/api/wells', wellRoutes);
 app.use('/api/wells', espRoutes);
 app.use('/api/wells', uploadRoutes);
 app.use('/api/wells', analyticsRoutes);
+app.use('/api/alerts', alertRoutes);
 
 app.use(errorHandler);
 

@@ -11,6 +11,7 @@ import { Badge, getRiskBadgeVariant, getHealthBadgeVariant } from '@/components/
 import { ArrowLeft, Settings, Activity, Trash2, Eye, Play, Loader2 } from 'lucide-react';
 import { DataViewer } from '@/components/wells/data-viewer';
 import { AnalysisResults } from '@/components/wells/analysis-results';
+import { WellCharts } from '@/components/wells/well-charts';
 
 export default function WellDetailPage() {
   const params = useParams();
@@ -449,6 +450,11 @@ export default function WellDetailPage() {
 
       {analysisResult && (
         <AnalysisResults result={analysisResult} />
+      )}
+
+      {/* Time-Series Charts */}
+      {selectedAnalysisUploadId && (
+        <WellCharts wellId={wellId} uploadId={selectedAnalysisUploadId} />
       )}
     </div>
   );
