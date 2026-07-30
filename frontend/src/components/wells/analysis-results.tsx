@@ -2,7 +2,7 @@
 
 import { AnalysisResult } from '@/types';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge, getRiskBadgeVariant, getHealthBadgeVariant } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertTriangle, CheckCircle, XCircle, TrendingDown,
   Lightbulb, ShieldAlert, Info,
@@ -32,42 +32,6 @@ export function AnalysisResults({ result }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Top-level scores */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <p className="text-xs text-slate-500">Health Score</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-3xl font-bold text-white">{result.health_score?.toFixed(0)}</span>
-            <Badge variant={getHealthBadgeVariant(result.health_score ?? 0)}>
-              {(result.health_score ?? 0) >= 90 ? 'Healthy' : (result.health_score ?? 0) >= 70 ? 'Normal' : (result.health_score ?? 0) >= 40 ? 'Degrading' : 'Critical'}
-            </Badge>
-          </div>
-        </Card>
-        <Card>
-          <p className="text-xs text-slate-500">Risk Level</p>
-          <div className="mt-1">
-            <Badge variant={getRiskBadgeVariant(result.risk_level ?? 'LOW')} className="text-lg px-3 py-1">
-              {result.risk_level}
-            </Badge>
-          </div>
-        </Card>
-        <Card>
-          <p className="text-xs text-slate-500">Failure Probability</p>
-          <p className="text-3xl font-bold text-white mt-1">
-            {result.failure_probability != null ? `${(result.failure_probability * 100).toFixed(0)}%` : '—'}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs text-slate-500">Failure Window</p>
-          <p className="text-lg font-semibold text-white mt-1">
-            {result.estimated_failure_window ?? 'None estimated'}
-          </p>
-          {result.predicted_failure_type && (
-            <p className="text-xs text-slate-400 mt-1">{result.predicted_failure_type.replace(/_/g, ' ')}</p>
-          )}
-        </Card>
-      </div>
-
       {/* Explanation */}
       <Card>
         <CardHeader>

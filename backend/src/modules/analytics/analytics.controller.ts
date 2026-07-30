@@ -20,9 +20,11 @@ export class AnalyticsController {
 
   async getHealth(req: Request, res: Response, next: NextFunction) {
     try {
+      const uploadId = req.query.uploadId as string | undefined;
       const prediction = await analyticsService.getLatestPrediction(
         req.params.id as string,
-        req.user!.userId
+        req.user!.userId,
+        uploadId
       );
       res.json({ status: 'success', data: prediction });
     } catch (error) {

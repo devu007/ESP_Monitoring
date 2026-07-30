@@ -52,6 +52,42 @@ export default function WellDetailPage() {
 
   useEffect(() => { fetchWell(); }, [wellId]);
 
+  const fetchSavedAnalysis = async (uploadId: string) => {
+    try {
+      const res = await api.get<any>(`/wells/${wellId}/health?uploadId=${uploadId}`);
+      if (res.data) {
+        const saved = res.data;
+        setAnalysisResult({
+          well_id: wellId,
+          health_score: saved.healthScore,
+          risk_level: saved.riskLevel,
+          failure_probability: saved.failureProbability,
+          predicted_failure_type: saved.predictedFailureType,
+          estimated_failure_window: saved.estimatedFailureWindow,
+          confidence: saved.confidence,
+          insufficient_data: saved.insufficientData,
+          missing_data_reason: saved.missingDataReason,
+          contributing_factors: saved.contributingFactors ?? [],
+          anomalies: saved.anomalySummary ?? [],
+          recommendations: saved.recommendations ?? [],
+          explanation: saved.explanation ?? '',
+          rule_results: [],
+        });
+      }
+    } catch {
+      // No saved result — that's fine, user can run analysis
+    }
+  };
+
+  const handleDatasetChange = (uploadId: string) => {
+    setSelectedAnalysisUploadId(uploadId);
+    setAnalysisResult(null);
+    setAnalysisError('');
+    if (uploadId) {
+      fetchSavedAnalysis(uploadId);
+    }
+  };
+
   const handleRunAnalysis = async () => {
     if (!selectedAnalysisUploadId) {
       setAnalysisError('Please select a dataset to analyze.');
@@ -129,6 +165,13 @@ export default function WellDetailPage() {
 
   const prediction = well.predictions?.[0];
 
+  const displayScore = analysisResult ? analysisResult.health_score : prediction?.healthScore;
+  const displayRisk = analysisResult ? analysisResult.risk_level : prediction?.riskLevel;
+  const displayFailureType = analysisResult ? analysisResult.predicted_failure_type : prediction?.predictedFailureType;
+  const displayFailureProb = analysisResult ? analysisResult.failure_probability : prediction?.failureProbability;
+  const displayFailureWindow = analysisResult ? analysisResult.estimated_failure_window : null;
+  const hasDisplay = displayScore != null;
+
   return (
     <div>
       <button onClick={() => router.push('/wells')} className="flex items-center gap-2 text-slate-400 hover:text-slate-200 mb-6 transition-colors">
@@ -143,34 +186,43 @@ export default function WellDetailPage() {
         <Badge variant={well.status === 'ACTIVE' ? 'healthy' : 'default'}>{well.status}</Badge>
       </div>
 
-      {/* Health Summary */}
-      {prediction && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      {/* Health Summary — driven by selected dataset analysis or latest prediction */}
+      {hasDisplay && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <p className="text-sm text-slate-400 mb-1">Health Score</p>
             <div className="flex items-center gap-3">
-              <span className="text-4xl font-bold text-white">{prediction.healthScore.toFixed(0)}</span>
-              <Badge variant={getHealthBadgeVariant(prediction.healthScore)}>
-                {prediction.healthScore >= 90 ? 'Healthy' : prediction.healthScore >= 70 ? 'Normal' : prediction.healthScore >= 40 ? 'Degrading' : 'Critical'}
+              <span className="text-4xl font-bold text-white">{displayScore!.toFixed(0)}</span>
+              <Badge variant={getHealthBadgeVariant(displayScore!)}>
+                {displayScore! >= 90 ? 'Healthy' : displayScore! >= 70 ? 'Normal' : displayScore! >= 40 ? 'Degrading' : 'Critical'}
               </Badge>
             </div>
           </Card>
           <Card>
             <p className="text-sm text-slate-400 mb-1">Risk Level</p>
-            <Badge variant={getRiskBadgeVariant(prediction.riskLevel)} className="text-lg px-4 py-1">
-              {prediction.riskLevel}
+            <Badge variant={getRiskBadgeVariant(displayRisk ?? 'LOW')} className="text-lg px-4 py-1">
+              {displayRisk}
             </Badge>
+          </Card>
+          <Card>
+            <p className="text-sm text-slate-400 mb-1">Failure Probability</p>
+            <p className="text-3xl font-bold text-white">
+              {displayFailureProb != null ? `${(displayFailureProb * 100).toFixed(0)}%` : '—'}
+            </p>
           </Card>
           <Card>
             <p className="text-sm text-slate-400 mb-1">Predicted Failure</p>
             <p className="text-lg font-semibold text-white">
-              {prediction.predictedFailureType?.replace(/_/g, ' ') ?? 'None detected'}
+              {displayFailureType?.replace(/_/g, ' ') ?? 'None detected'}
             </p>
+            {displayFailureWindow && (
+              <p className="text-xs text-slate-400 mt-1">Window: {displayFailureWindow}</p>
+            )}
           </Card>
         </div>
       )}
 
-      {!prediction && (
+      {!hasDisplay && (
         <Card className="mb-8">
           <div className="text-center py-8">
             <Activity className="w-10 h-10 text-slate-500 mx-auto mb-3" />
@@ -411,7 +463,7 @@ export default function WellDetailPage() {
             <label className="block text-xs font-medium text-slate-400 mb-1.5">Select Dataset</label>
             <select
               value={selectedAnalysisUploadId}
-              onChange={(e) => { setSelectedAnalysisUploadId(e.target.value); setAnalysisResult(null); setAnalysisError(''); }}
+              onChange={(e) => handleDatasetChange(e.target.value)}
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">-- Choose an uploaded dataset --</option>

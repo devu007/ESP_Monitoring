@@ -99,14 +99,17 @@ export class AnalyticsService {
     };
   }
 
-  async getLatestPrediction(wellId: string, userId: string) {
+  async getLatestPrediction(wellId: string, userId: string, uploadId?: string) {
     const well = await prisma.well.findFirst({
       where: { id: wellId, field: { userId } },
     });
     if (!well) throw new NotFoundError('Well');
 
+    const where: any = { wellId };
+    if (uploadId) where.uploadId = uploadId;
+
     const prediction = await prisma.failurePrediction.findFirst({
-      where: { wellId },
+      where,
       orderBy: { analyzedAt: 'desc' },
     });
 
